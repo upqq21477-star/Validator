@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Validator v1.2</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Noto+Sans+TC:wght@300;400;500&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg:     #07090f;
+  --bg2:    #0c0f1a;
+  --bg3:    #111626;
+  --border: #181e30;
+  --b2:     #202840;
+  --text:   #8a9cc0;
+  --dim:    #303d5a;
+  --mid:    #4a5e84;
+  --white:  #d4e2f8;
+  --A:      #3eb8f0;
+  --C:      #3ddc84;
+  --gold:   #f0c040;
+  --red:    #f07070;
+  --mono:   'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --sans:   'Noto Sans TC', sans-serif;
+  --display:'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* ── NOISE TEXTURE OVERLAY ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  opacity: 0.4;
+}
+
+/* ── GRID BACKGROUND ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(62,184,240,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(62,184,240,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── WRAPPER ── */
+#wrap {
+  position: relative; z-index: 1;
+  max-width: 680px; margin: 0 auto;
+  padding: 48px 24px 80px;
+  display: flex; flex-direction: column; gap: 40px;
+}
+
+/* ── HEADER ── */
+#header { display: flex; flex-direction: column; gap: 12px; }
+
+.brand-row {
+  display: flex; align-items: baseline; gap: 12px;
+}
+.brand-name {
+  font-family: var(--display);
+  font-size: 28px; font-weight: 800;
+  color: var(--white);
+  letter-spacing: -0.5px;
+}
+.brand-name em {
+  color: var(--A);
+  font-style: normal;
+}
+.brand-ver {
+  font-family: var(--mono);
+  font-size: 9px; color: var(--dim);
+  letter-spacing: 3px;
+  border: 1px solid var(--border);
+  border-radius: 2px; padding: 2px 7px;
+}
+.brand-desc {
+  font-size: 12px; color: var(--mid);
+  letter-spacing: 0.5px; line-height: 1.6;
+}
+.divider {
+  height: 1px; background: linear-gradient(90deg, var(--border) 0%, transparent 100%);
+}
+
+/* ── WARNING BANNER ── */
+#warn-banner {
+  background: rgba(240,192,64,0.04);
+  border: 1px solid rgba(240,192,64,0.2);
+  border-radius: 6px;
+  padding: 14px 18px;
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.warn-icon {
+  color: var(--gold);
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.warn-text {
+  font-family: var(--mono);
+  font-size: 9.5px; color: var(--gold);
+  line-height: 1.75; letter-spacing: 0.3px;
+  opacity: 0.85;
+}
+.warn-text strong { opacity: 1; color: var(--gold); }
+
+/* ── INPUT SECTION ── */
+#input-section { display: flex; flex-direction: column; gap: 12px; }
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 8px; letter-spacing: 3px;
+  color: var(--dim);
+}
+
+#json-input {
+  width: 100%;
+  min-height: 200px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text);
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+#json-input::placeholder { color: var(--dim); }
+#json-input:focus { border-color: var(--b2); }
+
+/* ── VALIDATE BUTTON ── */
+#validate-btn {
+  width: 100%; padding: 18px 24px;
+  background: var(--A);
+  border: none; border-radius: 6px;
+  font-family: var(--display);
+  font-size: 15px; font-weight: 700;
+  color: #040810;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  letter-spacing: 0.3px;
+  position: relative; overflow: hidden;
+}
+#validate-btn::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+  pointer-events: none;
+}
+#validate-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(62,184,240,0.28); background: #5ccaff; }
+#validate-btn:active { transform: translateY(0); }
+
+/* ── RESULT PANEL ── */
+#result-panel {
+  display: none;
+  border-radius: 6px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  flex-direction: column; gap: 16px;
+}
+#result-panel.valid {
+  display: flex;
+  border-color: rgba(61,220,132,0.35);
+  background: rgba(61,220,132,0.04);
+}
+#result-panel.invalid {
+  display: flex;
+  border-color: rgba(240,112,112,0.35);
+  background: rgba(240,112,112,0.04);
+}
+
+.result-headline {
+  font-family: var(--display);
+  font-size: 16px; font-weight: 700;
+}
+.result-headline.ok  { color: var(--C); }
+.result-headline.err { color: var(--red); }
+
+.result-sub {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 1.5px;
+  color: var(--mid); margin-top: 4px;
+}
+
+/* ── ERROR LIST ── */
+#error-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.err-item {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+  font-family: var(--mono); font-size: 10px; line-height: 1.6;
+  padding: 8px 12px;
+  background: rgba(240,112,112,0.05);
+  border: 1px solid rgba(240,112,112,0.12);
+  border-radius: 4px;
+}
+.err-loc  { color: var(--A); flex-shrink: 0; }
+.err-field { color: var(--white); flex-shrink: 0; }
+.err-dash  { color: var(--dim); }
+.err-msg   { color: var(--text); flex: 1; min-width: 0; word-break: break-word; }
+
+/* ── STATS ROW ── */
+#stats-row {
+  display: none;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+#stats-row.show { display: grid; }
+
+.stat-cell {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+  align-items: center; text-align: center;
+}
+.stat-label {
+  font-family: var(--mono);
+  font-size: 7px; letter-spacing: 2px; color: var(--dim);
+}
+.stat-value {
+  font-family: var(--display);
+  font-size: 18px; font-weight: 700; color: var(--white);
+  line-height: 1;
+}
+.stat-value.green { color: var(--C); }
+.stat-value.red   { color: var(--red); }
+.stat-value.dim   { color: var(--dim); font-size: 14px; }
+.stat-value.small { font-size: 12px; }
+
+/* ── FOOTER ── */
+#footer {
+  text-align: center;
+  font-family: var(--mono); font-size: 8px; letter-spacing: 2px;
+  color: var(--dim);
+}
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: var(--bg3); border: 1px solid var(--b2);
+  border-radius: 4px; padding: 9px 20px;
+  font-family: var(--mono); font-size: 10px; color: var(--white);
+  opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  z-index: 999; white-space: nowrap;
+}
+#toast.show { opacity: 1; }
+
+@media (max-width: 540px) {
+  .brand-name { font-size: 22px; }
+  #wrap { padding: 32px 16px 60px; }
+  #stats-row { grid-template-columns: repeat(3, 1fr); }
+  #stats-row .stat-cell:nth-child(4),
+  #stats-row .stat-cell:nth-child(5) { grid-column: span 1; }
+}
+</style>
+</head>
+<body>
+
+<div id="wrap">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="brand-row">
+      <span class="brand-name">Valid<em>ator</em></span>
+      <span class="brand-ver">v1.2</span>
+    </div>
+    <p class="brand-desc">貼入 Aggregator 輸出的 Log JSON，驗證格式後方可入庫。</p>
+    <div class="divider"></div>
+  </div>
+
+  <!-- UNIQUENESS WARNING BANNER -->
+  <div id="warn-banner">
+    <span class="warn-icon">⚠</span>
+    <div class="warn-text">
+      <strong>唯一性說明：</strong>本工具只檢查此份 JSON 內部的 entry.id 不重複。<br>
+      跨 DB 唯一性請由 DB PRIMARY KEY 或入庫腳本負責。
+    </div>
+  </div>
+
+  <!-- INPUT -->
+  <div id="input-section">
+    <div class="section-label">貼入 Log JSON</div>
+    <textarea id="json-input" spellcheck="false" placeholder="貼入 Aggregator 輸出的 Log JSON… (支援 change_type: config, doc, test, remove, none)"></textarea>
+    <button id="validate-btn" onclick="runValidate()">▶ 驗證</button>
+  </div>
+
+  <!-- RESULT PANEL -->
+  <div id="result-panel">
+    <div>
+      <div class="result-headline" id="result-headline"></div>
+      <div class="result-sub" id="result-sub"></div>
+    </div>
+    <div id="error-list"></div>
+  </div>
+
+  <!-- STATS ROW -->
+  <div id="stats-row">
+    <div class="stat-cell">
+      <div class="stat-label">ENTRIES</div>
+      <div class="stat-value" id="stat-entries">—</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">PASSED</div>
+      <div class="stat-value green" id="stat-passed">—</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">FAILED</div>
+      <div class="stat-value" id="stat-failed">—</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">MODE</div>
+      <div class="stat-value small dim" id="stat-mode">—</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">HAS_EVENTS</div>
+      <div class="stat-value small dim" id="stat-hasevents">—</div>
+    </div>
+  </div>
+
+  <div id="footer">VALIDATOR v1.2 · 已對齊 Aggregator v3a 規範 · 無後端 · 無狀態 · 跨 DB 唯一性請由 DB 負責</div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════
+const TOP_REQUIRED       = ['entries', 'session_summary', '_meta'];
+const META_REQUIRED      = ['source', 'version', 'mode'];
+const META_MODE_VALUES   = ['event', 'compile', 'summarize'];
+const ENTRY_REQUIRED     = [
+  'id', 'objective', 'action', 'result',
+  'decision', 'impact', 'change_summary',
+  'change_type', 'event_refs', 'ts'
+];
+const DECISION_VALUES     = ['adopted', 'rejected', 'pending'];
+const IMPACT_LEVEL_VALUES = ['low', 'medium', 'high'];
+// impact.scope 為任意字串陣列（對齊 Aggregator spec），不限定固定值
+// 對齊 Aggregator v3a spec 的八個合法值
+const CHANGE_TYPE_VALUES  = ['feature', 'fix', 'refactor', 'config', 'doc', 'test', 'remove', 'none'];
+
+// ══════════════════════════════════════════════
+// MAIN VALIDATE
+// ══════════════════════════════════════════════
+function runValidate() {
+  // Reset UI
+  const panel     = document.getElementById('result-panel');
+  const statsRow  = document.getElementById('stats-row');
+  panel.className = '';
+  panel.style.display = 'none';
+  statsRow.classList.remove('show');
+  document.getElementById('error-list').innerHTML = '';
+
+  const raw = document.getElementById('json-input').value.trim();
+
+  // Empty guard
+  if (!raw) {
+    toast('請先貼入 Log JSON');
+    return;
+  }
+
+  const errors = [];  // { location, field, msg }
+
+  // ── Layer 1: JSON Parse ──────────────────────
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    errors.push({ location: '[結構]', field: 'JSON', msg: `解析失敗：${e.message}` });
+    renderResult(errors, 0, 0, 0, null);
+    return;
+  }
+
+  // ── Layer 2: Top-level required fields ───────
+  for (const key of TOP_REQUIRED) {
+    if (!(key in data)) {
+      errors.push({ location: '[結構]', field: key, msg: '必填欄位缺失' });
+    }
+  }
+  if ('entries' in data) {
+    if (!Array.isArray(data.entries)) {
+      errors.push({ location: '[結構]', field: 'entries', msg: '必須是陣列' });
+    } else if (data.entries.length === 0) {
+      errors.push({ location: '[結構]', field: 'entries', msg: '不可為空陣列' });
+    }
+  }
+
+  // ── Layer 3: _meta validation ─────────────────
+  if (data._meta && typeof data._meta === 'object') {
+    for (const key of META_REQUIRED) {
+      if (!(key in data._meta)) {
+        errors.push({ location: '[結構]', field: `_meta.${key}`, msg: '必填欄位缺失' });
+      }
+    }
+    if ('mode' in data._meta && !META_MODE_VALUES.includes(data._meta.mode)) {
+      errors.push({
+        location: '[結構]',
+        field: '_meta.mode',
+        msg: `只能是 event / compile / summarize，收到：${data._meta.mode}`
+      });
+    }
+  }
+
+  // ── Layers 4–7: Entry-level ───────────────────
+  const entries = Array.isArray(data.entries) ? data.entries : [];
+  const seen = new Set();
+
+  entries.forEach((entry, i) => {
+    const loc = `[entry ${i}]`;
+
+    // Layer 4: Required entry fields
+    for (const key of ENTRY_REQUIRED) {
+      if (!(key in entry)) {
+        errors.push({ location: loc, field: key, msg: '必填欄位缺失' });
+      }
+    }
+
+    // Layer 4: impact sub-field validation
+    if ('impact' in entry) {
+      if (typeof entry.impact !== 'object' || Array.isArray(entry.impact) || entry.impact === null) {
+        errors.push({ location: loc, field: 'impact', msg: '必須是物件（含 level 和 scope）' });
+      } else {
+        if (!('level' in entry.impact)) {
+          errors.push({ location: loc, field: 'impact.level', msg: '必填欄位缺失' });
+        }
+        if (!('scope' in entry.impact)) {
+          errors.push({ location: loc, field: 'impact.scope', msg: '必填欄位缺失' });
+        }
+      }
+    }
+
+    // Layer 5: Value domain constraints
+    if ('decision' in entry && !DECISION_VALUES.includes(entry.decision)) {
+      errors.push({
+        location: loc, field: 'decision',
+        msg: `只能是 adopted / rejected / pending，收到：${entry.decision}`
+      });
+    }
+    if (entry.impact && typeof entry.impact === 'object' && !Array.isArray(entry.impact)) {
+      if ('level' in entry.impact && !IMPACT_LEVEL_VALUES.includes(entry.impact.level)) {
+        errors.push({
+          location: loc, field: 'impact.level',
+          msg: `只能是 low / medium / high，收到：${entry.impact.level}`
+        });
+      }
+      // scope 為任意字串陣列（對齊 Aggregator spec，如 ["stageA","renderLoop"]）
+      if ('scope' in entry.impact) {
+        if (!Array.isArray(entry.impact.scope)) {
+          errors.push({
+            location: loc, field: 'impact.scope',
+            msg: `必須是字串陣列，收到：${typeof entry.impact.scope}`
+          });
+        } else {
+          entry.impact.scope.forEach((s, si) => {
+            if (typeof s !== 'string' || !s.trim()) {
+              errors.push({ location: loc, field: `impact.scope[${si}]`, msg: '元素必須是非空字串' });
+            }
+          });
+        }
+      }
+    }
+    if (entry.change_type && !CHANGE_TYPE_VALUES.includes(entry.change_type)) {
+      errors.push({
+        location: loc, field: 'change_type',
+        msg: `值域錯誤。應為 [${CHANGE_TYPE_VALUES.join(', ')}]，收到：${entry.change_type}`
+      });
+    }
+
+    // Layer 6: Quality rules
+    if ('change_summary' in entry && entry.change_summary !== null) {
+      if (typeof entry.change_summary === 'string') {
+        if (entry.change_summary.length < 10) {
+          errors.push({
+            location: loc, field: 'change_summary',
+            msg: `長度不足 10 字（目前：${entry.change_summary.length} 字）`
+          });
+        }
+        if ('objective' in entry && entry.change_summary === entry.objective) {
+          errors.push({ location: loc, field: 'change_summary', msg: '不可與 objective 完全相同' });
+        }
+      }
+    }
+
+    // event_refs：event 模式下不可為空；compile/summarize 模式允許空陣列
+    if ('event_refs' in entry) {
+      if (!Array.isArray(entry.event_refs)) {
+        errors.push({ location: loc, field: 'event_refs', msg: '必須是陣列' });
+      } else {
+        const isEventMode = data._meta && data._meta.mode === 'event';
+        if (isEventMode && entry.event_refs.length === 0) {
+          errors.push({ location: loc, field: 'event_refs', msg: 'event 模式下不可為空陣列，至少需一個 event id' });
+        }
+        entry.event_refs.forEach((ref, ri) => {
+          if (typeof ref !== 'string' || !ref.trim()) {
+            errors.push({ location: loc, field: `event_refs[${ri}]`, msg: '必須是非空字串' });
+          }
+        });
+      }
+    }
+
+    // ts 為 ISO 8601 字串 或 null（對齊 Aggregator spec）
+    if ('ts' in entry) {
+      const tsVal = entry.ts;
+      if (tsVal !== null) {
+        if (typeof tsVal !== 'string' || !tsVal.trim()) {
+          errors.push({ location: loc, field: 'ts', msg: '必須是 ISO 8601 字串或 null' });
+        } else if (!/^\d{4}-\d{2}-\d{2}/.test(tsVal.trim())) {
+          errors.push({ location: loc, field: 'ts', msg: `格式不符 ISO 8601，收到：${tsVal}` });
+        }
+      }
+    }
+
+    if ('id' in entry) {
+      if (typeof entry.id !== 'string' || !entry.id.trim()) {
+        errors.push({ location: loc, field: 'id', msg: '必須是非空字串' });
+      }
+    }
+
+    // Layer 7: Internal id uniqueness
+    if (typeof entry.id === 'string' && entry.id.trim()) {
+      if (seen.has(entry.id)) {
+        errors.push({ location: loc, field: 'id', msg: `與前面的 entry 重複：${entry.id}` });
+      }
+      seen.add(entry.id);
+    }
+  });
+
+  // ── Compute stats ──────────────────────────────
+  const totalEntries = entries.length;
+  const failEntries = new Set();
+  errors.forEach(e => {
+    const m = e.location.match(/entry (\d+)/);
+    if (m) failEntries.add(parseInt(m[1]));
+  });
+  const failCount = failEntries.size;
+  const passCount = totalEntries - failCount;
+
+  renderResult(errors, totalEntries, passCount, failCount, data._meta);
+}
+
+// ══════════════════════════════════════════════
+// RENDER RESULT
+// ══════════════════════════════════════════════
+function renderResult(errors, total, pass, fail, meta) {
+  const panel    = document.getElementById('result-panel');
+  const headline = document.getElementById('result-headline');
+  const sub      = document.getElementById('result-sub');
+  const errList  = document.getElementById('error-list');
+  const statsRow = document.getElementById('stats-row');
+
+  if (errors.length === 0) {
+    // VALID
+    panel.className = 'valid';
+    headline.className = 'result-headline ok';
+    headline.textContent = `✓ VALID — ${total} entries，可入庫`;
+    sub.textContent = '';
+    errList.innerHTML = '';
+  } else {
+    // INVALID
+    panel.className = 'invalid';
+    headline.className = 'result-headline err';
+    headline.textContent = `✗ 發現 ${errors.length} 個問題`;
+    sub.textContent = '';
+
+    errList.innerHTML = errors.map(e => `
+      <div class="err-item">
+        <span class="err-loc">${escHtml(e.location)}</span>
+        <span class="err-field">${escHtml(e.field)}</span>
+        <span class="err-dash">—</span>
+        <span class="err-msg">${escHtml(e.msg)}</span>
+      </div>
+    `).join('');
+  }
+
+  panel.style.display = 'flex';
+
+  // Stats
+  renderStats(total, pass, fail, meta);
+  statsRow.classList.add('show');
+}
+
+// ══════════════════════════════════════════════
+// RENDER STATS
+// ══════════════════════════════════════════════
+function renderStats(total, pass, fail, meta) {
+  document.getElementById('stat-entries').textContent = total;
+  document.getElementById('stat-passed').textContent  = pass;
+
+  const failEl = document.getElementById('stat-failed');
+  failEl.textContent = fail;
+  failEl.className   = fail > 0 ? 'stat-value red' : 'stat-value dim';
+
+  const modeEl = document.getElementById('stat-mode');
+  modeEl.textContent = meta?.mode ?? '—';
+  modeEl.className   = 'stat-value small' + (meta?.mode ? '' : ' dim');
+
+  const heEl = document.getElementById('stat-hasevents');
+  if (meta?.has_events === true)       { heEl.textContent = 'true';  heEl.className = 'stat-value small green'; }
+  else if (meta?.has_events === false) { heEl.textContent = 'false'; heEl.className = 'stat-value small dim'; }
+  else                                  { heEl.textContent = '—';    heEl.className = 'stat-value small dim'; }
+}
+
+// ══════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════
+function toast(msg, dur = 2200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ══════════════════════════════════════════════
+// UTIL
+// ══════════════════════════════════════════════
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
